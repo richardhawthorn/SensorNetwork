@@ -16,13 +16,13 @@
 #define PIXELS false
 #define PIXELS_PIN 8
 
-#define PIR false
-#define PIR_PIN 14
+#define PIR true
+#define PIR_PIN 7
 
-#define SOUND true
+#define SOUND false
 #define SOUND_PIN 17
 
-#define LIGHT true
+#define LIGHT false
 #define LIGHT_PIN 16
 
 //How oftern should we send out readings (in minutes)?
@@ -34,7 +34,7 @@
 #define BASIC_HUMID_PIN 8
 
 #define HUMID true
-#define HUMID_TEMP true
+#define HUMID_TEMP false
 
 #define PRESSURE true
 #define PRESSURE_TEMP false
@@ -640,7 +640,7 @@ void serialEvent() {
 
 #if HUMID
   void checkHumid(){
-  
+ 
     float h = htu.readHumidity();
     float t = htu.readTemperature();
     
@@ -656,16 +656,16 @@ void serialEvent() {
     humid.trim();
     temp.trim();
     
+    #if HUMID_TEMP
     if (!(isnan(t))) {    
       dataTemp = generateSendString("temp", temp);
     }
+    #endif
     
-    #if HUMID_TEMP
     if (!(isnan(h))) {    
      dataHumid = generateSendString("humid", humid);
     }
-    #endif
-      
+       
   }
 #endif
 
