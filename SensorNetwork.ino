@@ -3,7 +3,7 @@
 //#####################################
 
 //Our node id
-#define NODEID 1
+#define NODEID 3
 #define GROUPID 28
 
 //128 x 64 LCD screen
@@ -16,17 +16,26 @@
 #define PIXELS false
 #define PIXELS_PIN 8
 
-#define PIR true
+#define PIR false
 #define PIR_PIN 7
 
 #define SOUND false
 #define SOUND_PIN 17
 
-#define LIGHT false
+#define LIGHT true
 #define LIGHT_PIN 16
+
+#define SENSOR2 false
+#define SENSOR2_PIN 4
+
+#define SENSOR3 false
+#define SENSOR3_PIN 21
 
 //How oftern should we send out readings (in minutes)?
 #define PERIOD 1
+
+//low power mode?
+#define LOW_POWER false
 
 //Individual Sensors
 #define BASIC_HUMID false
@@ -41,7 +50,10 @@
 
 #define TEMP true
 
-//Power
+#define VOLTAGE true
+#define VOLTAGE_PIN A0
+
+//building power
 #define POWER false
 #define POWER_PIN A1
 
@@ -51,7 +63,10 @@
 #define LED3 6
 #define LED4 9
 
-#define HUB true
+#define HUB false
+
+//Output serial debug strings
+#define DEBUG true
 
 //uint8_t KEY[] = "ABCDABCDABCDABCD"; 
 
@@ -89,6 +104,10 @@
 
 #if LCD128
   #include "U8glib.h"
+#endif
+
+#if LOW_POWER
+ // #include "LowPower.h"
 #endif
 
 //#####################################
@@ -164,6 +183,8 @@ String dataPressure;
 String dataSound;
 String dataLight;
 String dataPir;
+String dataSensor;
+String dataVoltage;
 
 //used for sending out sensor readings
 int lastMinute = -1;
@@ -178,6 +199,9 @@ boolean pir_movement = false;
 
 //power
 float power_max = 0;
+
+//sensor
+boolean sensor2_triggered = false;
 
 //single leds
 #if LEDS
@@ -218,61 +242,117 @@ PacketBuffer payload;   // temp buffer to send out rf data
 //  Setup
 //#####################################
 
-ISR(WDT_vect) { Sleepy::watchdogEvent(); }        
+#if (!LOW_POWER)
+  ISR(WDT_vect) { Sleepy::watchdogEvent(); }    
+#endif
 
 void setup () 
 {
+  
   Serial.begin(115200);
   Serial.println("Hey, Data");
   rf12_initialize(NODEID,RF12_433MHZ,GROUPID); // NodeID, Frequency, Group
   //rf12_encrypt(KEY);
   
-  Serial.println(rf12_config());
+ // Serial.println(rf12_config());
+  
+  debugMessage("Start setup");
   
   RfIn.reserve(50);
   toRf.reserve(50);
   
-  dataPower.reserve(50);
+  #if POWER
+    dataPower.reserve(50);
+  #endif
+  
+  #if HUMID
   dataHumid.reserve(50);
+  #endif
+  
+  #if TEMP
   dataTemp.reserve(50);
+  #endif
+  
+  #if PRESSURE
   dataPressure.reserve(50);
+  #endif
+  
+  #if SOUND
   dataSound.reserve(50);
+  #endif
+  
+  #if LIGHT
   dataLight.reserve(50);
+  #endif
+  
+  #if PIR
   dataPir.reserve(50);
+  #endif
+  
+  #if SENSOR2
+  dataSensor.reserve(50);
+  #endif
+  
+  #if VOLTAGE
+  dataVoltage.reserve(50);
+  #endif
+ 
+  debugMessage("Setup outputs");
   
   #if PIXELS
     //neopixels
+    debugMessage("Setup pixels");
     strip.begin();
     strip.show(); // Initialize all pixels to 'off'
   #endif
   
   #if BASIC_HUMID
     //basic humid
+    debugMessage("Setup basic humidity");
     dht.begin();
   #endif
   
   #if POWER
+    debugMessage("Setup power");
     emon1.current(POWER_PIN, 111.1);
   #endif
   
   #if HUMID
+    debugMessage("Setup humidity");
     htu.begin();
   #endif
   
   #if PRESSURE
+    debugMessage("Setup pressure");
     baro.begin();
   #endif
   
   #if TEMP
+    debugMessage("Setup temperature");
     tempsensor.begin();
   #endif
     
   #if PIR
     //pir
+    debugMessage("Setup pir");
     pinMode(PIR_PIN, INPUT);
+    digitalWrite(PIR_PIN, LOW);
+  #endif
+  
+  #if VOLTAGE
+    //device voltage pin
+    debugMessage("Setup voltage");
+    pinMode(VOLTAGE_PIN, INPUT);
+  #endif
+  
+  #if SENSOR2
+    debugMessage("Setup sensor2");
+    pinMode(SENSOR2_PIN, INPUT);   
+    digitalWrite(SENSOR2_PIN, HIGH);
   #endif
   
   #if LEDS
+    debugMessage("Setup leds");
     pinMode(LED1, OUTPUT);
     pinMode(LED2, OUTPUT);
     pinMode(LED3, OUTPUT);
@@ -280,6 +360,7 @@ void setup ()
   #endif
   
   #if LCD128
+    debugMessage("Setup lcd128");
     pinMode(BACKLIGHT_LED_RED, OUTPUT);
     pinMode(BACKLIGHT_LED_GREEN, OUTPUT);
     pinMode(BACKLIGHT_LED_BLUE, OUTPUT);
@@ -292,8 +373,21 @@ void setup ()
     redrawLcd();
   #endif
   
+  debugMessage("Setup complete!");
+  
 }
 
+//#####################################
+//  LCD128 draw
+//#####################################
+
+void debugMessage(String message){
+  
+  #if DEBUG
+    Serial.println(message);
+  #endif
+  
+}
 
 //#####################################
 //  LCD128 draw
@@ -329,7 +423,7 @@ void drawLcd128(void) {
   power.toCharArray(power_char, power.length());
   
   u8g.setFont(u8g_font_helvR14);
-  u8g.drawStr( 0, 14, "House Monitor");
+  u8g.drawStr( 0, 14, "Living Room");
   
   u8g.drawLine( 0, 16, 128, 16);
    
@@ -376,6 +470,8 @@ void checkRf(){
 
 String generateSendString(String type, String value){
   
+  debugMessage("Generating String");
+  
   String tempString;
   
   tempString = "data|";
@@ -413,7 +509,11 @@ void sendReading(String type, String value){
 void scheduleNextRfSend(){
   
   if (toRfComplete == false){
-    if (dataHumid.length() > 0){
+    if (dataVoltage.length() > 0){
+      toRf = dataVoltage;
+      dataVoltage = "";
+      toRfComplete = true;
+    } else if (dataHumid.length() > 0){
       toRf = dataHumid;
       dataHumid = "";
       toRfComplete = true;
@@ -441,6 +541,10 @@ void scheduleNextRfSend(){
       toRf = dataSound;
       dataSound = "";
       toRfComplete = true;
+    } else if (dataSensor.length() > 0){
+      toRf = dataSensor;
+      dataSensor = "";
+      toRfComplete = true;
     }
   } 
     
@@ -454,6 +558,8 @@ void sendRf(){
   
   //RF Out
   if (toRfComplete) {
+    
+    debugMessage("Sending");
     
     //if this is the hub, send over serial NOT rf
     if (HUB){
@@ -803,13 +909,46 @@ void runSensors(){
     }
     power_max = 0; 
   }
+  
+  if (SENSOR2){
+    if (sensor2_triggered == true){
+      dataSensor = generateSendString("sensor2", "1");
+    } else {
+      dataSensor = generateSendString("sensor2", "0");
+    }
+    sensor2_triggered = false;
+  }
+  
+  if (VOLTAGE){
+    
+    int voltage_adc = analogRead(VOLTAGE_PIN);
+    //adc level * arduino voltage * 2 (as we are in potential divider)
+    float voltage_float = (voltage_adc/1024.0) * 3.3 * 2;
+    
+    char voltage_char[10]; 
+    dtostrf(voltage_float, 5, 3, voltage_char);
+    String voltage = voltage_char;   
+    
+    dataVoltage = generateSendString("voltage", voltage); 
+  }
+  
 }
+
+
+
 
 void runContinuousSensors(){
   
   if (PIR){
     if (digitalRead(PIR_PIN) == HIGH){
         pir_movement = true;
+    }
+  }
+  
+  //sensor pin has internal pullup
+  if (SENSOR2){
+    if (digitalRead(SENSOR2_PIN) == LOW){
+        sensor2_triggered = true;
     }
   }
   
@@ -823,6 +962,7 @@ void runContinuousSensors(){
     soundMax = max(soundMax, analogRead(SOUND_PIN));
     soundMin = min(soundMin, analogRead(SOUND_PIN));
   }
+ 
   
 }
 
@@ -885,15 +1025,51 @@ void loop ()
   }
   */
   
+  //if we are in low power mode, only check the sensors once every wakeup period
+  #if LOW_POWER
+    
+    if (SENSORS){
+      runContinuousSensors();
+      runSensors();
+    }
+    
+    scheduleNextRfSend();
+    sendRf();
+    
+    /*
+    delay(50);
+    scheduleNextRfSend();
+    sendRf();
+    delay(50);
+    scheduleNextRfSend();
+    sendRf();
+    delay(50);
+    scheduleNextRfSend();
+    sendRf();
+    delay(50);
+    scheduleNextRfSend();
+    sendRf();
+    */
+    
+    //sleep for 64 seconds * the sensor period (it's near enough a minute)
+    for (int i = 0; i < (8 * PERIOD); i++) { 
+       LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_OFF); 
+    }
+    
+  //else run the sensors normally  
+  #else
+  
+    if (SENSORS){
+      checkSensorTiming();
+    }
+    
+    checkSecond();
+    
+  #endif
+  
   checkRf();
   processRf();
   sendRf();
-  
-  if (SENSORS){
-    checkSensorTiming();
-  }
-  
-  checkSecond();
 
 }
 
