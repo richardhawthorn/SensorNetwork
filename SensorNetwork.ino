@@ -3,17 +3,17 @@
 //#####################################
 
 //Our node id
-#define NODEID 3
+#define NODEID 7
 #define GROUPID 28
 
 //128 x 64 LCD screen
 #define LCD128 false
 
 //All sensors on or off
-#define SENSORS true
+#define SENSORS false
 
 //Led pixels enabled?
-#define PIXELS false
+#define PIXELS true
 #define PIXELS_PIN 8
 
 #define PIR false
@@ -64,9 +64,15 @@
 #define LED4 9
 
 #define HUB false
-
+ 
 //Output serial debug strings
-#define DEBUG true
+#define DEBUG false
+
+#define MATRIX3208 false
+#define MATRIX3208CS1 4
+#define MATRIX3208WR 5
+#define MATRIX3208DATA 6
+#define MATRIX3208SPEED 100
 
 //uint8_t KEY[] = "ABCDABCDABCDABCD"; 
 
@@ -77,6 +83,12 @@
 #include <JeeLib.h>  
 #include <Time.h>
 #include <Wire.h>
+
+#if MATRIX3208
+  #include <HT1632.h>
+  #include <font_5x4.h>
+  #include <images.h>
+#endif
 
 #if PIXELS
   #include <Adafruit_NeoPixel.h>
@@ -170,6 +182,13 @@ private:
   Adafruit_MCP9808 tempsensor = Adafruit_MCP9808();
 #endif
 
+#if MATRIX3208
+  int matrixLoop = 0;
+  int matrixLength;
+  char matrixString [50] = "HeyData";
+  long millisCheck = 0;
+#endif
+
 //Serial strings
 String RfIn = "";
 boolean RfInComplete = false;
@@ -248,7 +267,6 @@ PacketBuffer payload;   // temp buffer to send out rf data
 
 void setup () 
 {
-  
   Serial.begin(115200);
   Serial.println("Hey, Data");
   rf12_initialize(NODEID,RF12_433MHZ,GROUPID); // NodeID, Frequency, Group
@@ -295,6 +313,11 @@ void setup ()
   
   #if VOLTAGE
   dataVoltage.reserve(50);
+  #endif
+  
+  #if MATRIX3208
+    HT1632.begin(MATRIX3208DATA, MATRIX3208WR, MATRIX3208CS1);
+    matrixLength = HT1632.getTextWidth(matrixString, FONT_5X4_END, FONT_5X4_HEIGHT);
   #endif
  
   debugMessage("Setup outputs");
@@ -447,7 +470,7 @@ void drawLcd128(void) {
 //#####################################
 
 void checkRf(){
- 
+  
   //RF In -> Serial Out
   if (rf12_recvDone() && rf12_crc == 0) {
       // a packet has been received
@@ -554,30 +577,33 @@ void scheduleNextRfSend(){
 //  Send our RF data
 //#####################################
 
+void sendPayload(String message){
+   payload.print(message);
+   rf12_sendStart(0, payload.buffer(), payload.length());
+   payload.reset(); 
+}
+  
 void sendRf(){
   
   //RF Out
   if (toRfComplete) {
     
-    debugMessage("Sending");
-    
-    //if this is the hub, send over serial NOT rf
-    if (HUB){
+    //this doesn't seem to be working, so taking it out
+    //if (rf12_canSend()){
+      
+      debugMessage("Sending");
+      
+      sendPayload(toRf);
+      
+      //if this is the hub, send over rf AND serial  
+      if (HUB){
+        Serial.println(toRf);      
+      }
       
       toRfComplete = false;
-      Serial.println(toRf);
-      toRf = "";
-      
-    } else if (rf12_canSend()){
-      
-      toRfComplete = false;
-
-      payload.print(toRf);
-      rf12_sendStart(0, payload.buffer(), payload.length());
-      payload.reset();
       
       toRf = "";
-    }
+    //}
   } 
   
   /*
@@ -653,8 +679,8 @@ void processRf(){
     }
     
     #if PIXELS
-      if ((node_to == "2") && (node_type == "led")){
-        colorWipe(strip.Color(node_extra1.toInt(), node_extra2.toInt(), node_extra3.toInt()));
+      if ((node_to.toInt() == NODEID) && (node_type == "colour")){
+        colorWipe(Wheel(node_value.toInt()));
       }
     #endif
     
@@ -679,6 +705,12 @@ void processRf(){
         redrawLcd();
       }
     #endif
+    
+    #if MATRIX3208
+      if ((node_to.toInt() == NODEID) && (node_type == "string")){
+        matrix3208NewData(node_value);
+      }
+    #endif
   
     RfIn = "";
     
@@ -696,17 +728,38 @@ void serialEvent() {
     // get the new byte:
     char inChar = (char)Serial.read(); 
     // add it to the inputString:
-    toRf += inChar;
+    
     // if the incoming character is a newline, set a flag
     // so the main loop can do something about it:
-    Serial.print(".");
     if (inChar == '\n') {
       toRfComplete = true;
-      Serial.println("serial in complete");
-    } 
+      //Serial.println("complete");      
+    } else {
+      
+      //asdd the character to the incoming string
+      toRf += inChar;
+      //Serial.print(".");
+      
+    }
   }
   
 }
+
+#if PIXELS
+
+uint32_t Wheel(byte WheelPos) {
+  if(WheelPos < 85) {
+   return strip.Color(WheelPos * 3, 255 - WheelPos * 3, 0);
+  } else if(WheelPos < 170) {
+   WheelPos -= 85;
+   return strip.Color(255 - WheelPos * 3, 0, WheelPos * 3);
+  } else {
+   WheelPos -= 170;
+   return strip.Color(0, WheelPos * 3, 255 - WheelPos * 3);
+  }
+}
+
+#endif
 
 //#####################################
 //  Sensors
@@ -935,6 +988,64 @@ void runSensors(){
 }
 
 
+//#####################################
+//  Matrix 3208 - new string
+//#####################################
+
+#if MATRIX3208
+void matrix3208NewData(String newString){
+ 
+  newString.trim();
+  newString.toCharArray(matrixString, newString.length() + 1);
+
+  Serial.println(matrixString);
+  
+  //matrixString = newString;
+  matrixLength = HT1632.getTextWidth(matrixString, FONT_5X4_END, FONT_5X4_HEIGHT);
+  matrixLoop = 0;
+  
+  HT1632.clear();
+  HT1632.render();
+}
+
+//#####################################
+//  Matrix 3208 - draw the text!
+//#####################################
+
+void drawMatrix3208(){
+ 
+ long millisNow = millis();
+ 
+ //make sure that when we roll over to 0 we reset everything
+ if (millisNow < 2000){
+   millisCheck = 0;
+   return;
+ }
+ 
+ if (millisNow < (millisCheck + MATRIX3208SPEED)){
+   return;
+ }
+ 
+ millisCheck = millisNow;
+ 
+ if (matrixLength < 33){
+    
+    HT1632.clear();
+    HT1632.drawText(matrixString, 0, 2, FONT_5X4, FONT_5X4_END, FONT_5X4_HEIGHT);
+    HT1632.render();
+    
+  } else {
+  
+    HT1632.clear();
+    HT1632.drawText(matrixString, OUT_SIZE - matrixLoop, 2, FONT_5X4, FONT_5X4_END, FONT_5X4_HEIGHT);
+    HT1632.render();
+    
+    matrixLoop = (matrixLoop+1)%(matrixLength + OUT_SIZE);
+    
+  } 
+}
+#endif
+
 
 
 void runContinuousSensors(){
@@ -1070,6 +1181,10 @@ void loop ()
   checkRf();
   processRf();
   sendRf();
+  
+  #if MATRIX3208
+    drawMatrix3208();
+  #endif
 
 }
 
