@@ -74,8 +74,8 @@
 #define MATRIX3208DATA 6
 #define MATRIX3208SPEED 100
 
-#define SEGMENT14 true
-#define SEGMENT7 false
+#define SEGMENT14 false
+#define SEGMENT7 true
 #define MATRIX8X8 false
 #define MATRIX8X8BI false
 
@@ -195,6 +195,10 @@ private:
 
 #if SEGMENT14
   Adafruit_AlphaNum4 alpha4 = Adafruit_AlphaNum4();
+#endif
+
+#if SEGMENT7
+  Adafruit_7segment matrix = Adafruit_7segment();
 #endif
 
 #if MATRIX3208
@@ -419,6 +423,15 @@ void setup ()
     alpha4.writeDigitAscii(3, ' ');
     alpha4.writeDisplay();
   #endif
+  
+  #if SEGMENT7
+    matrix.begin(0x70);
+    matrix.print(1234);
+    matrix.drawColon(true);
+    matrix.writeDisplay();
+  #endif
+  
+  
   
   debugMessage("Setup complete!");
   
@@ -740,6 +753,19 @@ void processRf(){
         alpha4.writeDigitAscii(2, valArray[2]);
         alpha4.writeDigitAscii(3, valArray[3]);
         alpha4.writeDisplay();
+      }
+    #endif
+    
+    #if SEGMENT7
+      if ((node_to.toInt() == NODEID) && (node_type == "string")){
+        
+        char floatbuf[32]; // make this at least big enough for the whole string
+        node_value.toCharArray(floatbuf, sizeof(floatbuf));
+        float f = atof(floatbuf);
+
+        matrix.drawColon(false);
+        matrix.print(f);
+        matrix.writeDisplay();
       }
     #endif
     
