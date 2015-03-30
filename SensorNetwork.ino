@@ -201,6 +201,14 @@ private:
   Adafruit_7segment matrix = Adafruit_7segment();
 #endif
 
+#if MATRIX8X8
+  Adafruit_8x8matrix matrix = Adafruit_8x8matrix();
+#endif
+
+#if MATRIX8X8BI
+  Adafruit_BicolorMatrix matrix = Adafruit_BicolorMatrix();
+#endif
+
 #if MATRIX3208
   int matrixLoop = 0;
   int matrixLength;
@@ -416,6 +424,7 @@ void setup ()
   #endif
   
   #if SEGMENT14
+    debugMessage("Setup 14 Segment");
     alpha4.begin(0x70);  // pass in the address
     alpha4.writeDigitAscii(0, 'H');
     alpha4.writeDigitAscii(1, 'E');
@@ -425,14 +434,31 @@ void setup ()
   #endif
   
   #if SEGMENT7
+    debugMessage("Setup 7 Segment");
     matrix.begin(0x70);
     matrix.print(1234);
     matrix.drawColon(true);
     matrix.writeDisplay();
   #endif
   
+  #if MATRIX8X8
+    debugMessage("Setup 8x8 Matrix");
+    matrix.begin(0x70);
+    matrix.clear();
+    matrix.drawBitmap(0, 0, smile_bmp, 8, 8, LED_ON);
+    matrix.writeDisplay();
+  #endif
+  
+  #if MATRIX8X8BI
+    debugMessage("Setup 8x8 Bi-Color Matrix");
+    matrix.begin(0x70);
+    matrix.clear();
+    matrix.drawBitmap(0, 0, smile_bmp, 8, 8, LED_GREEN);
+    matrix.writeDisplay();
+  #endif
   
   
+ 
   debugMessage("Setup complete!");
   
 }
@@ -448,6 +474,43 @@ void debugMessage(String message){
   #endif
   
 }
+
+//#####################################
+//  Matrix Images
+//#####################################
+
+#if MATRIX8X8 || MATRIX8X8BI
+
+  static const uint8_t PROGMEM
+    smile_bmp[] =
+    { B00111100,
+      B01000010,
+      B10100101,
+      B10000001,
+      B10100101,
+      B10011001,
+      B01000010,
+      B00111100 },
+    neutral_bmp[] =
+    { B00111100,
+      B01000010,
+      B10100101,
+      B10000001,
+      B10111101,
+      B10000001,
+      B01000010,
+      B00111100 },
+    frown_bmp[] =
+    { B00111100,
+      B01000010,
+      B10100101,
+      B10000001,
+      B10011001,
+      B10100101,
+      B01000010,
+      B00111100 };
+#endif
+
 
 //#####################################
 //  LCD128 draw
