@@ -3,7 +3,7 @@
 //#####################################
 
 //Our node id
-#define NODEID 7
+#define NODEID 8
 #define GROUPID 28
 
 //128 x 64 LCD screen
@@ -42,7 +42,7 @@
 #define BASIC_HUMID_TEMP false
 #define BASIC_HUMID_PIN 8
 
-#define HUMID true
+#define HUMID false
 #define HUMID_TEMP false
 
 #define PRESSURE true
@@ -50,7 +50,7 @@
 
 #define TEMP true
 
-#define VOLTAGE true
+#define VOLTAGE false
 #define VOLTAGE_PIN A0
 
 //building power
@@ -66,13 +66,19 @@
 #define HUB false
  
 //Output serial debug strings
-#define DEBUG false
+#define DEBUG true
 
 #define MATRIX3208 false
 #define MATRIX3208CS1 4
 #define MATRIX3208WR 5
 #define MATRIX3208DATA 6
 #define MATRIX3208SPEED 100
+
+#define SEGMENT14 true
+#define SEGMENT7 false
+#define MATRIX8X8 false
+#define MATRIX8X8BI false
+
 
 //uint8_t KEY[] = "ABCDABCDABCDABCD"; 
 
@@ -120,6 +126,11 @@
 
 #if LOW_POWER
  // #include "LowPower.h"
+#endif
+
+#if SEGMENT14 || SEGMENT7 || MATRIX8X8 || MATRIX8X8BI
+  #include "Adafruit_LEDBackpack.h"
+  #include "Adafruit_GFX.h"
 #endif
 
 //#####################################
@@ -180,6 +191,10 @@ private:
 
 #if TEMP
   Adafruit_MCP9808 tempsensor = Adafruit_MCP9808();
+#endif
+
+#if SEGMENT14
+  Adafruit_AlphaNum4 alpha4 = Adafruit_AlphaNum4();
 #endif
 
 #if MATRIX3208
@@ -396,12 +411,21 @@ void setup ()
     redrawLcd();
   #endif
   
+  #if SEGMENT14
+    alpha4.begin(0x70);  // pass in the address
+    alpha4.writeDigitAscii(0, 'H');
+    alpha4.writeDigitAscii(1, 'E');
+    alpha4.writeDigitAscii(2, 'Y');
+    alpha4.writeDigitAscii(3, ' ');
+    alpha4.writeDisplay();
+  #endif
+  
   debugMessage("Setup complete!");
   
 }
 
 //#####################################
-//  LCD128 draw
+//  DEBUG message
 //#####################################
 
 void debugMessage(String message){
@@ -706,6 +730,19 @@ void processRf(){
       }
     #endif
     
+    #if SEGMENT14
+      if ((node_to.toInt() == NODEID) && (node_type == "string")){
+        char valArray[8];
+        node_value.toCharArray(valArray, 8);
+  
+        alpha4.writeDigitAscii(0, valArray[0]);
+        alpha4.writeDigitAscii(1, valArray[1]);
+        alpha4.writeDigitAscii(2, valArray[2]);
+        alpha4.writeDigitAscii(3, valArray[3]);
+        alpha4.writeDisplay();
+      }
+    #endif
+    
     #if MATRIX3208
       if ((node_to.toInt() == NODEID) && (node_type == "string")){
         matrix3208NewData(node_value);
@@ -759,6 +796,7 @@ uint32_t Wheel(byte WheelPos) {
   }
 }
 
+
 #endif
 
 //#####################################
@@ -800,6 +838,8 @@ uint32_t Wheel(byte WheelPos) {
 #if HUMID
   void checkHumid(){
  
+    debugMessage("Checking Humidity");
+     
     float h = htu.readHumidity();
     float t = htu.readTemperature();
     
@@ -831,6 +871,8 @@ uint32_t Wheel(byte WheelPos) {
 #if PRESSURE
   void checkPressure(){
   
+    debugMessage("Checking Pressure");
+    
     float pascals = baro.getPressure();
     float bar = pascals/100000;
     
@@ -860,6 +902,8 @@ uint32_t Wheel(byte WheelPos) {
 #if TEMP
   void checkTemp(){
   
+    debugMessage("Checking Temperature");
+    
     float temp = tempsensor.readTempC();
     char temp_char[10];
     
@@ -874,6 +918,8 @@ uint32_t Wheel(byte WheelPos) {
 
 #if LIGHT
   void checkLight(){
+   
+   debugMessage("Checking Light");
    
    int li = analogRead(LIGHT_PIN);
    char light_char[10];
@@ -907,6 +953,8 @@ void checkSensorTiming(){
 }
 
 void runSensors(){
+  
+  debugMessage("Running Sensors");
   
   if (BASIC_HUMID){
     checkBasicHumid();
