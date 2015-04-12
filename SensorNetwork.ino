@@ -3,17 +3,17 @@
 //#####################################
 
 //Our node id
-#define NODEID 8
+#define NODEID 9
 #define GROUPID 28
 
 //128 x 64 LCD screen
-#define LCD128 false
+#define LCD128 true
 
 //All sensors on or off
 #define SENSORS false
 
 //Led pixels enabled?
-#define PIXELS true
+#define PIXELS false
 #define PIXELS_PIN 8
 
 #define PIR false
@@ -75,7 +75,7 @@
 #define MATRIX3208SPEED 100
 
 #define SEGMENT14 false
-#define SEGMENT7 true
+#define SEGMENT7 false
 #define MATRIX8X8 false
 #define MATRIX8X8BI false
 
@@ -256,11 +256,11 @@ boolean sensor2_triggered = false;
 
 //lcd
 #if LCD128
-  #define BACKLIGHT_LED_RED 17
-  #define BACKLIGHT_LED_GREEN 4
-  #define BACKLIGHT_LED_BLUE 3
+  #define BACKLIGHT_LED_RED 3
+  #define BACKLIGHT_LED_GREEN 5
+  #define BACKLIGHT_LED_BLUE 6
 
-  U8GLIB_LM6059 u8g(6, 5, 9, 7, 8);
+  U8GLIB_LM6059 u8g(15, 4, 9, 7, 8);
 
   String lcd_temp = "0";
   String lcd_humid = "0";
@@ -528,19 +528,19 @@ void drawLcd128(void) {
   temp.toCharArray(temp_char, temp.length());
   
   String humid = "";
-  char humid_char[10] = "";
+  char humid_char[12] = "";
   humid += lcd_humid;
   humid += "% ";
   humid.toCharArray(humid_char, humid.length());
   
   String pressure = "";
-  char pressure_char[8] = "";
+  char pressure_char[12] = "";
   pressure += lcd_pressure;
-  pressure += "mb ";
+  pressure += "b ";
   pressure.toCharArray(pressure_char, pressure.length());
   
   String power = "";
-  char power_char[8] = "";
+  char power_char[12] = "";
   power += lcd_power;
   power += "w ";
   power.toCharArray(power_char, power.length());
@@ -800,7 +800,7 @@ void processRf(){
         redrawLcd();
       }
       
-      if ((node_to == "0") && (node_type == "pres")){
+      if ((node_to == "0") && (node_type == "pressure")){
         lcd_pressure = node_value;
         redrawLcd();
       }
@@ -1220,6 +1220,7 @@ void runContinuousSensors(){
 
 void redrawLcd(){
   #if LCD128
+    debugMessage("Redrawing 128 LCD");
     u8g.firstPage();  
     do {
       drawLcd128();
