@@ -3,14 +3,14 @@
 //#####################################
 
 //Our node id
-#define NODEID 9
+#define NODEID 1
 #define GROUPID 28
 
 //128 x 64 LCD screen
-#define LCD128 true
+#define LCD128 false
 
 //All sensors on or off
-#define SENSORS false
+#define SENSORS true
 
 //Led pixels enabled?
 #define PIXELS false
@@ -42,7 +42,7 @@
 #define BASIC_HUMID_TEMP false
 #define BASIC_HUMID_PIN 8
 
-#define HUMID false
+#define HUMID true
 #define HUMID_TEMP false
 
 #define PRESSURE true
@@ -63,15 +63,15 @@
 #define LED3 6
 #define LED4 9
 
-#define HUB false
+#define HUB true
  
 //Output serial debug strings
-#define DEBUG true
+#define DEBUG false
 
 #define MATRIX3208 false
-#define MATRIX3208CS1 4
-#define MATRIX3208WR 5
-#define MATRIX3208DATA 6
+#define MATRIX3208CS1 6
+#define MATRIX3208WR 8
+#define MATRIX3208DATA 9
 #define MATRIX3208SPEED 100
 
 #define SEGMENT14 false
@@ -79,6 +79,7 @@
 #define MATRIX8X8 false
 #define MATRIX8X8BI false
 
+#define BUTTONS false
 
 //uint8_t KEY[] = "ABCDABCDABCDABCD"; 
 
@@ -126,6 +127,10 @@
 
 #if LOW_POWER
  // #include "LowPower.h"
+#endif
+
+#if BUTTONS
+  #include "Adafruit_MPR121.h"
 #endif
 
 #if SEGMENT14 || SEGMENT7 || MATRIX8X8 || MATRIX8X8BI
@@ -209,6 +214,27 @@ private:
   Adafruit_BicolorMatrix matrix = Adafruit_BicolorMatrix();
 #endif
 
+#if BUTTONS
+  Adafruit_MPR121 cap = Adafruit_MPR121();
+  uint16_t buttoncurrent = 0;
+  uint16_t buttonlast = 0;
+  
+  char buttons[12] = {0,0,0,0,0,0,0,0,0,0,0,0};
+  
+  int btn_up = 0;
+  int btn_right = 1;
+  int btn_down = 2;
+  int btn_left = 3;
+  int btn_home = 4;
+  int btn_cancel = 5;
+  int btn_menu = 6;
+  int btn_enter = 7;
+  int btn_tl = 8;
+  int btn_bl = 9;
+  int btn_tr = 10;
+  int btn_br = 11;
+#endif
+
 #if MATRIX3208
   int matrixLoop = 0;
   int matrixLength;
@@ -221,6 +247,8 @@ String RfIn = "";
 boolean RfInComplete = false;
 String toRf = "";
 boolean toRfComplete = false;
+
+String stringToProcess = "";
 
 String dataPower;
 String dataHumid;
@@ -260,12 +288,13 @@ boolean sensor2_triggered = false;
   #define BACKLIGHT_LED_GREEN 5
   #define BACKLIGHT_LED_BLUE 6
 
-  U8GLIB_LM6059 u8g(15, 4, 9, 7, 8);
+  U8GLIB_LM6059 u8g(14, 4, 9, 7, 8);
 
   String lcd_temp = "0";
   String lcd_humid = "0";
   String lcd_pressure = "0";
   String lcd_power = "0";
+  String lcd_light = "0";
 #endif
 
 //payload to send over RF
@@ -343,7 +372,7 @@ void setup ()
   #endif
   
   #if MATRIX3208
-    HT1632.begin(MATRIX3208DATA, MATRIX3208WR, MATRIX3208CS1);
+    HT1632.begin(MATRIX3208CS1, MATRIX3208WR, MATRIX3208DATA);
     matrixLength = HT1632.getTextWidth(matrixString, FONT_5X4_END, FONT_5X4_HEIGHT);
   #endif
  
@@ -421,6 +450,12 @@ void setup ()
    
     u8g.setColorIndex(1);         // pixel on
     redrawLcd();
+  #endif
+  
+  #if BUTTONS
+    if (!cap.begin(0x5A)) {
+      debugMessage("Error in button setup");
+    }
   #endif
   
   #if SEGMENT14
@@ -545,22 +580,27 @@ void drawLcd128(void) {
   power += "w ";
   power.toCharArray(power_char, power.length());
   
+  String light = "";
+  char light_char[12] = "";
+  light += lcd_light;
+  light.toCharArray(light_char, light.length());
+  
   u8g.setFont(u8g_font_helvR14);
-  u8g.drawStr( 0, 14, "Living Room");
+  u8g.drawStr( 0, 14, "HeyData!");
   
   u8g.drawLine( 0, 16, 128, 16);
    
   u8g.setFont(u8g_font_baby);
-  u8g.drawStr( 0, 39, "Power");
+  u8g.drawStr( 0, 39, "Humidity");
   u8g.drawStr( 0, 62, "Temperature");
   u8g.drawStr( 62, 39, "Pressure");
-  u8g.drawStr( 62, 62, "Humidity");
+  u8g.drawStr( 62, 62, "Light");
   
   u8g.setFont(u8g_font_helvR14);
-  u8g.drawStr( 0, 33, power_char);
+  u8g.drawStr( 0, 33, humid_char);
   u8g.drawStr( 0, 56, temp_char);
   u8g.drawStr( 62, 33, pressure_char);
-  u8g.drawStr( 62, 56, humid_char);
+  u8g.drawStr( 62, 56, light_char);
   
 }
 #endif
@@ -608,6 +648,137 @@ String generateSendString(String type, String value){
   return tempString;
   
 }
+
+
+//#####################################
+//  Process the incoming string
+//#####################################
+
+void processString(){
+  
+    String node_from = "";
+    String node_to = "";
+    String node_type = "";
+    String node_value = "";
+    String node_extra1 = "";
+    String node_extra2 = "";
+    String node_extra3 = "";
+ 
+    int message_section = 0;
+    char currentCharacter;
+    char delimiter = '|';
+    
+    // if input starts with the string 'data' then we know it is for us
+    if (stringToProcess.substring(0,5) == "data|") {
+      for (int i = 5; i < stringToProcess.length(); i++){
+
+        currentCharacter = stringToProcess.charAt(i);
+        if (currentCharacter == delimiter){
+          message_section++;
+        } else {
+          if (message_section == 0){
+            node_from += currentCharacter;
+          }
+          else if (message_section == 1){
+            node_to += currentCharacter;
+          }
+          else if (message_section == 2){
+            node_type += currentCharacter;
+          }
+          else if (message_section == 3){
+            node_value += currentCharacter;
+          } 
+          else if (message_section == 4){
+            node_extra1 += currentCharacter;
+          } 
+          else if (message_section == 5){
+            node_extra2 += currentCharacter;
+          } 
+          else if (message_section == 6){
+            node_extra3 += currentCharacter;
+          } 
+        }
+      }
+    }
+    
+    #if PIXELS
+      if ((node_to.toInt() == NODEID) && (node_type == "colour")){
+        colorWipe(Wheel(node_value.toInt()));
+      }
+    #endif
+    
+    #if LCD128
+      if ((node_to == "0") && (node_type == "temp")){
+        lcd_temp = node_value;
+        redrawLcd();
+      }
+      
+
+      if ((node_to == "0") && (node_type == "humid")){
+        lcd_humid = node_value;
+        redrawLcd();
+      }
+      
+      /*
+      if ((node_to == "0") && (node_type == "power")){
+        lcd_power = node_value;
+        redrawLcd();
+      }
+      */
+      
+      if ((node_to == "0") && (node_type == "light")){
+        lcd_light = node_value;
+        redrawLcd();
+      }
+
+      if ((node_to == "0") && (node_type == "pressure")){
+        lcd_pressure = node_value;
+        redrawLcd();
+      }
+
+    #endif
+    
+    #if SEGMENT14
+      if ((node_to.toInt() == NODEID) && (node_type == "string")){
+        char valArray[8];
+        node_value.toCharArray(valArray, 8);
+        
+        for (int i=0; i <= 4; i++){
+          if (node_value.charAt(i) == ' '){
+            valArray[i] = ' ';
+          }
+        }
+
+        alpha4.writeDigitAscii(0, valArray[0]);
+        alpha4.writeDigitAscii(1, valArray[1]);
+        alpha4.writeDigitAscii(2, valArray[2]);
+        alpha4.writeDigitAscii(3, valArray[3]);
+        alpha4.writeDisplay();
+      }
+    #endif
+    
+    #if SEGMENT7
+      if ((node_to.toInt() == NODEID) && (node_type == "string")){
+        
+        char floatbuf[32]; // make this at least big enough for the whole string
+        node_value.toCharArray(floatbuf, sizeof(floatbuf));
+        float f = atof(floatbuf);
+
+        matrix.drawColon(false);
+        matrix.print(f);
+        matrix.writeDisplay();
+      }
+    #endif
+    
+    #if MATRIX3208
+      if ((node_to.toInt() == NODEID) && (node_type == "string")){
+        matrix3208NewData(node_value);
+      }
+    #endif
+  
+    stringToProcess = "";
+    
+  } 
 
 //#####################################
 //  Send our RF data
@@ -702,7 +873,13 @@ void sendRf(){
       
       toRfComplete = false;
       
+      //process this here too, as we might want to action the data locally
+      stringToProcess = toRf;
       toRf = "";
+      
+      processString();
+      
+      
     //}
   } 
   
@@ -733,116 +910,17 @@ void processRf(){
     RfInComplete = false;
     //do some stuff maybe?
     
-    String node_from = "";
-    String node_to = "";
-    String node_type = "";
-    String node_value = "";
-    String node_extra1 = "";
-    String node_extra2 = "";
-    String node_extra3 = "";
- 
-    int message_section = 0;
-    char currentCharacter;
-    char delimiter = '|';
-    
-    // if input starts with the string 'data' then we know it is for us
-    if (RfIn.substring(0,5) == "data|") {
-      for (int i = 5; i < RfIn.length(); i++){
-
-        currentCharacter = RfIn.charAt(i);
-        if (currentCharacter == delimiter){
-          message_section++;
-        } else {
-          if (message_section == 0){
-            node_from += currentCharacter;
-          }
-          else if (message_section == 1){
-            node_to += currentCharacter;
-          }
-          else if (message_section == 2){
-            node_type += currentCharacter;
-          }
-          else if (message_section == 3){
-            node_value += currentCharacter;
-          } 
-          else if (message_section == 4){
-            node_extra1 += currentCharacter;
-          } 
-          else if (message_section == 5){
-            node_extra2 += currentCharacter;
-          } 
-          else if (message_section == 6){
-            node_extra3 += currentCharacter;
-          } 
-        }
-      }
-    }
-    
-    #if PIXELS
-      if ((node_to.toInt() == NODEID) && (node_type == "colour")){
-        colorWipe(Wheel(node_value.toInt()));
-      }
-    #endif
-    
-    #if LCD128
-      if ((node_to == "0") && (node_type == "temp")){
-        lcd_temp = node_value;
-        redrawLcd();
-      }
-      
-      if ((node_to == "0") && (node_type == "humid")){
-        lcd_humid = node_value;
-        redrawLcd();
-      }
-      
-      if ((node_to == "0") && (node_type == "power")){
-        lcd_power = node_value;
-        redrawLcd();
-      }
-      
-      if ((node_to == "0") && (node_type == "pressure")){
-        lcd_pressure = node_value;
-        redrawLcd();
-      }
-    #endif
-    
-    #if SEGMENT14
-      if ((node_to.toInt() == NODEID) && (node_type == "string")){
-        char valArray[8];
-        node_value.toCharArray(valArray, 8);
-  
-        alpha4.writeDigitAscii(0, valArray[0]);
-        alpha4.writeDigitAscii(1, valArray[1]);
-        alpha4.writeDigitAscii(2, valArray[2]);
-        alpha4.writeDigitAscii(3, valArray[3]);
-        alpha4.writeDisplay();
-      }
-    #endif
-    
-    #if SEGMENT7
-      if ((node_to.toInt() == NODEID) && (node_type == "string")){
-        
-        char floatbuf[32]; // make this at least big enough for the whole string
-        node_value.toCharArray(floatbuf, sizeof(floatbuf));
-        float f = atof(floatbuf);
-
-        matrix.drawColon(false);
-        matrix.print(f);
-        matrix.writeDisplay();
-      }
-    #endif
-    
-    #if MATRIX3208
-      if ((node_to.toInt() == NODEID) && (node_type == "string")){
-        matrix3208NewData(node_value);
-      }
-    #endif
-  
+    stringToProcess = RfIn;
     RfIn = "";
     
-  } 
+    processString();
+  
+  }
   
 }
+
+
+
 
 //#####################################
 //  Capture incoming serial data
@@ -859,6 +937,7 @@ void serialEvent() {
     // so the main loop can do something about it:
     if (inChar == '\n') {
       toRfComplete = true;
+    
       //Serial.println("complete");      
     } else {
       
@@ -1253,7 +1332,45 @@ void checkSecond(){
   }
   
 }
+
+#if BUTTONS
+void checkButtons(){
   
+  buttoncurrent = cap.touched();
+  
+  for (uint8_t i=0; i<12; i++) {
+    // it if *is* touched and *wasnt* touched before, alert!
+    if ((buttoncurrent & _BV(i)) && !(buttonlast & _BV(i)) ) {
+      buttons[i] = 1;
+      #if DEBUG
+        Serial.print(i); Serial.println(" touched");
+      #endif
+    }
+    // if it *was* touched and now *isnt*, alert!
+    if (!(buttoncurrent & _BV(i)) && (buttonlast & _BV(i)) ) {
+      #if DEBUG
+        Serial.print(i); Serial.println(" released");
+      #endif
+    }
+  }
+
+  // reset our state
+  buttonlast = buttoncurrent;
+  
+}
+
+boolean checkButton(int button_id){
+  if (buttons[button_id] == 1){
+     buttons[button_id] = 0;       
+     return true;
+  } else {
+    return false;
+  }
+}
+
+#endif
+
+
 //#####################################
 //  Main Loop
 //#####################################
@@ -1319,6 +1436,15 @@ void loop ()
   checkRf();
   processRf();
   sendRf();
+  
+  #if BUTTONS
+  
+  if (checkButton(btn_up)){
+      Serial.println("up");
+  }
+  
+    checkButtons();
+  #endif
   
   #if MATRIX3208
     drawMatrix3208();
