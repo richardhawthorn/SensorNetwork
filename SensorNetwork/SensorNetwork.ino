@@ -1,16 +1,51 @@
+
+//#############################################
+//
+//  Sensor Network Code
+//  Richard Hawthorn
+//  February 2015
+//  
+//  Collect data from sensors, send it to
+//  be logged, processed and visulaised.
+//
+//  Sensors
+//
+//  Temperature
+//  Humidity
+//  Pressure
+//  Sound
+//  Light
+//  Movement
+//  Power
+//  Door entry
+//  Proximity
+//  Air quality
+//  Battery Levels
+//
+//  Visulaise
+//
+//  7 Segment
+//  14 Segment
+//  8x8 Matrix
+//  8x8 bi-colour matrix
+//
+//
+//#############################################
+
+
 //#####################################
 //  Turn on features and define pins
 //#####################################
 
 //Our node id
-#define NODEID 1
+#define NODEID 12
 #define GROUPID 28
 
 //128 x 64 LCD screen
-#define LCD128 false
+#define LCD128 true
 
 //All sensors on or off
-#define SENSORS true
+#define SENSORS false
 
 //Led pixels enabled?
 #define PIXELS false
@@ -66,7 +101,7 @@
 #define HUB true
  
 //Output serial debug strings
-#define DEBUG false
+#define DEBUG true
 
 #define MATRIX3208 false
 #define MATRIX3208CS1 6
@@ -79,7 +114,7 @@
 #define MATRIX8X8 false
 #define MATRIX8X8BI false
 
-#define BUTTONS false
+#define BUTTONS true
 
 //uint8_t KEY[] = "ABCDABCDABCDABCD"; 
 
@@ -295,6 +330,20 @@ boolean sensor2_triggered = false;
   String lcd_pressure = "0";
   String lcd_power = "0";
   String lcd_light = "0";
+  
+  String lcd_page = "home";
+  
+  char* menu[]={
+    "Power", 
+    "Light", 
+    "Another",
+    "Another 2", 
+    "Another 3",
+    "Another 4"
+  };
+  
+  int menu_pos = 0;
+  
 #endif
 
 //payload to send over RF
@@ -554,7 +603,9 @@ void debugMessage(String message){
 #if LCD128
 void drawLcd128(void) {
   // graphic commands to redraw the complete screen should be placed here  
-  
+ 
+  if (lcd_page == "home"){
+    
   String temp = "";
   char temp_char[12] = "";
   temp += lcd_temp;
@@ -601,6 +652,25 @@ void drawLcd128(void) {
   u8g.drawStr( 0, 56, temp_char);
   u8g.drawStr( 62, 33, pressure_char);
   u8g.drawStr( 62, 56, light_char);
+  
+  } else if (lcd_page == "menu"){
+    
+    u8g.setFont(u8g_font_helvR14);
+    u8g.drawStr( 0, 14, "menu");
+    u8g.drawLine( 0, 16, 128, 16);
+    
+    u8g.setFont(u8g_font_baby);
+    
+    for (int lcdloop = 0; lcdloop < 6; lcdloop++){
+      u8g.drawStr( 3, 23 + (lcdloop*8), menu[lcdloop]); 
+    }
+    
+    u8g.drawLine( 0, 16 + (menu_pos * 8), 55, 16 + (menu_pos * 8));
+    u8g.drawLine( 0, 24 + (menu_pos * 8), 55, 24 + (menu_pos * 8));
+    u8g.drawLine( 0, 16 + (menu_pos * 8), 0, 24 + (menu_pos * 8));
+    u8g.drawLine( 55, 16 + (menu_pos * 8), 55, 24 + (menu_pos * 8));
+
+  }
   
 }
 #endif
@@ -1439,10 +1509,38 @@ void loop ()
   
   #if BUTTONS
   
-  if (checkButton(btn_up)){
-      Serial.println("up");
-  }
+    if (checkButton(btn_up)){
+        Serial.println("up");
+        menu_pos--;
+        redrawLcd();
+    }
+    
+    if (checkButton(btn_down)){
+        Serial.println("down");
+        menu_pos++;
+        redrawLcd();
+    }
+    
+    if (checkButton(btn_left)){
+        Serial.println("left");
+    }
+    
+    if (checkButton(btn_right)){
+        Serial.println("right");
+    }
+    
+    if (checkButton(btn_menu)){
+        lcd_page = "menu";
+        redrawLcd();
+    }
   
+    if (checkButton(btn_home)){
+        lcd_page = "home";
+        redrawLcd();
+    }
+    
+    
+    
     checkButtons();
   #endif
   
