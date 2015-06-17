@@ -1,17 +1,17 @@
 # SensorNetwork
 
-Software to run the my network of sensors
+Software to run my network of sensors
 
-# Processor
+### Processor
 
-Built in Amtel ATMEGA328P running the Arduino bootloader
+Built in Amtel ATMEGA328P running the Arduino boot-loader
 
-# Communication
+### Communication
 
 - External communication through WiFi using Electric Imp
 - Internal communication through RFM12B 433Mhz Modules
 
-# Reports
+### Reports
 
 - Temperature
 - Humidity
@@ -22,7 +22,7 @@ Built in Amtel ATMEGA328P running the Arduino bootloader
 - Door Opening
 - Power Use
 
-# Output
+### Output
 
 - 7 Segment LED
 - 17 Segment LED
