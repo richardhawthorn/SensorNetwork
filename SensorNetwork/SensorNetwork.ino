@@ -334,15 +334,16 @@ boolean sensor2_triggered = false;
   String lcd_page = "home";
   
   char* menu[]={
-    "Power", 
-    "Light", 
-    "Another",
-    "Another 2", 
-    "Another 3",
-    "Another 4"
+    "Backlight", 
+    "Brightness",
+    "Sensors", 
+    "Buttons",
+    "Sleep",
+    "Reset"
   };
   
   int menu_pos = 0;
+  int menu_selected = -1;
   
 #endif
 
@@ -653,10 +654,36 @@ void drawLcd128(void) {
   u8g.drawStr( 62, 33, pressure_char);
   u8g.drawStr( 62, 56, light_char);
   
+  } else if (menu_selected >= 0){
+    
+    u8g.setFont(u8g_font_helvR14);
+    u8g.drawStr( 0, 14, menu[menu_selected]);
+    u8g.drawLine( 0, 16, 128, 16);
+    
+    if (menu_selected == 0){
+      // menu 0
+      
+    } else if (menu_selected == 1){
+      // menu 1
+   
+    } else if (menu_selected == 2){
+      // menu 2
+     
+    } else if (menu_selected == 3){
+      // menu 3
+     
+    } else if (menu_selected == 4){
+      // menu 4
+     
+    } else if (menu_selected == 5){
+      // menu 5 
+      
+    }
+    
   } else if (lcd_page == "menu"){
     
     u8g.setFont(u8g_font_helvR14);
-    u8g.drawStr( 0, 14, "menu");
+    u8g.drawStr( 0, 14, "Menu");
     u8g.drawLine( 0, 16, 128, 16);
     
     u8g.setFont(u8g_font_baby);
@@ -1512,25 +1539,39 @@ void loop ()
     if (checkButton(btn_up)){
         Serial.println("up");
         menu_pos--;
+        if (menu_pos < 0){
+          menu_pos = 0; 
+        }
         redrawLcd();
     }
     
     if (checkButton(btn_down)){
         Serial.println("down");
         menu_pos++;
+        if (menu_pos > 5){
+          menu_pos = 5; 
+        }
         redrawLcd();
     }
     
     if (checkButton(btn_left)){
-        Serial.println("left");
+        //Serial.println("left");
+        menu_selected = -1;
+        redrawLcd();
     }
     
     if (checkButton(btn_right)){
-        Serial.println("right");
+        //Serial.println("right");
+        if (menu_selected == -1){
+           menu_selected = menu_pos;
+        }
+        redrawLcd();
     }
     
     if (checkButton(btn_menu)){
         lcd_page = "menu";
+        menu_selected = -1;
+        menu_pos = 0; 
         redrawLcd();
     }
   
